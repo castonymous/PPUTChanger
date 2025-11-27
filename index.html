@@ -134,7 +134,7 @@
     .file-name {
       font-size: 12px;
       color: #4b5563;
-      max-width: 180px;
+      max-width: 160px;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -142,6 +142,18 @@
     .file-name.placeholder {
       color: #9ca3af;
       font-style: italic;
+    }
+
+    .btn-mini {
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid #d1d5db;
+      background: white;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .btn-mini:hover {
+      background: #f3f4f6;
     }
 
     .range-row {
@@ -264,6 +276,7 @@
           <span>Pilih Template</span>
         </label>
         <span id="templateName" class="file-name placeholder">Belum ada file</span>
+        <button id="clearTemplateBtn" type="button" class="btn-mini">Hapus</button>
       </div>
     </div>
 
@@ -277,6 +290,7 @@
           <span>Pilih Foto</span>
         </label>
         <span id="photoName" class="file-name placeholder">Belum ada file</span>
+        <button id="clearPhotoBtn" type="button" class="btn-mini">Hapus</button>
       </div>
     </div>
 
@@ -335,7 +349,7 @@
       <label>Zoom Foto</label>
       <div class="range-row">
         <input id="zoom" type="range" min="50" max="300" value="100">
-        <span><span id="zoomVal">100</span>%</span>
+          <span><span id="zoomVal">100</span>%</span>
       </div>
     </div>
     <div class="field">
@@ -378,6 +392,8 @@
   const photoInput = document.getElementById('photoInput');
   const templateNameSpan = document.getElementById('templateName');
   const photoNameSpan = document.getElementById('photoName');
+  const clearTemplateBtn = document.getElementById('clearTemplateBtn');
+  const clearPhotoBtn = document.getElementById('clearPhotoBtn');
 
   const canvas = document.getElementById('previewCanvas');
   const ctx = canvas.getContext('2d');
@@ -531,7 +547,7 @@
     renderToCanvas(canvas, ctx, PREVIEW_W, PREVIEW_H, fontScale);
   }
 
-  // template input
+  // TEMPLATE INPUT
   templateInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -543,7 +559,7 @@
     });
   });
 
-  // photo input
+  // FOTO INPUT
   photoInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -558,6 +574,29 @@
       document.getElementById('zoomVal').textContent = 100;
       redrawPreview();
     });
+  });
+
+  // CLEAR TEMPLATE
+  clearTemplateBtn.addEventListener('click', () => {
+    templateImg = null;
+    templateInput.value = "";
+    templateNameSpan.textContent = "Belum ada file";
+    templateNameSpan.classList.add('placeholder');
+    redrawPreview();
+  });
+
+  // CLEAR FOTO
+  clearPhotoBtn.addEventListener('click', () => {
+    photoImg = null;
+    photoInput.value = "";
+    photoNameSpan.textContent = "Belum ada file";
+    photoNameSpan.classList.add('placeholder');
+    state.zoom = 1.0;
+    state.offsetX = 0;
+    state.offsetY = 0;
+    document.getElementById('zoom').value = 100;
+    document.getElementById('zoomVal').textContent = 100;
+    redrawPreview();
   });
 
   function bindSlider(id, key) {
