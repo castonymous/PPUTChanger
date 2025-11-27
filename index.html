@@ -99,8 +99,49 @@
       border-color: var(--ut-blue);
       box-shadow: 0 0 0 1px rgba(0,75,141,0.15);
     }
-    .field input[type="file"] {
-      font-size: 13px;
+
+    /* ---- FILE INPUT MODERN ---- */
+    .file-input-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .file-input-wrap input[type="file"] {
+      display: none; /* hide native */
+    }
+    .file-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(0,75,141,0.3);
+      background: rgba(0,75,141,0.05);
+      color: var(--ut-blue);
+      font-size: 12px;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.15s, box-shadow 0.15s;
+    }
+    .file-btn:hover {
+      background: rgba(0,75,141,0.12);
+      box-shadow: 0 2px 6px rgba(15,23,42,0.15);
+    }
+    .file-btn span.icon {
+      font-size: 14px;
+    }
+    .file-name {
+      font-size: 12px;
+      color: #4b5563;
+      max-width: 180px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .file-name.placeholder {
+      color: #9ca3af;
+      font-style: italic;
     }
 
     .range-row {
@@ -213,13 +254,30 @@
   <section class="card">
     <h2>Pengaturan <span class="tag">Template &amp; Foto</span></h2>
 
+    <!-- TEMPLATE INPUT -->
     <div class="field">
       <label>Template (KTM) — PNG/JPG</label>
-      <input id="templateInput" type="file" accept="image/*" />
+      <div class="file-input-wrap">
+        <input id="templateInput" type="file" accept="image/*" />
+        <label for="templateInput" class="file-btn">
+          <span class="icon">📂</span>
+          <span>Pilih Template</span>
+        </label>
+        <span id="templateName" class="file-name placeholder">Belum ada file</span>
+      </div>
     </div>
+
+    <!-- FOTO INPUT -->
     <div class="field">
       <label>Foto — PNG/JPG (background polos)</label>
-      <input id="photoInput" type="file" accept="image/*" />
+      <div class="file-input-wrap">
+        <input id="photoInput" type="file" accept="image/*" />
+        <label for="photoInput" class="file-btn">
+          <span class="icon">📷</span>
+          <span>Pilih Foto</span>
+        </label>
+        <span id="photoName" class="file-name placeholder">Belum ada file</span>
+      </div>
     </div>
 
     <hr style="margin:8px 0;border:none;border-top:1px solid #e5e7eb;">
@@ -313,11 +371,14 @@
 
 <script>
   // ==== KONFIG PREVIEW ====
-  const PREVIEW_W = 330;  // kira² rasio 56x88, tapi ukuran kecil
+  const PREVIEW_W = 330;
   const PREVIEW_H = 520;
 
   const templateInput = document.getElementById('templateInput');
   const photoInput = document.getElementById('photoInput');
+  const templateNameSpan = document.getElementById('templateName');
+  const photoNameSpan = document.getElementById('photoName');
+
   const canvas = document.getElementById('previewCanvas');
   const ctx = canvas.getContext('2d');
 
@@ -334,10 +395,9 @@
   let templateImg = null;
   let photoImg = null;
 
-  // nilai resolusi export (px)
   let exportWidthPx = 661;
   let exportHeightPx = 1039;
-  let aspectRatio = parseFloat(widthMmInput.value) / parseFloat(heightMmInput.value); // W/H
+  let aspectRatio = parseFloat(widthMmInput.value) / parseFloat(heightMmInput.value);
 
   const state = {
     centerX: 50,
@@ -348,7 +408,6 @@
     offsetY: 0
   };
 
-  // ---- helper hitung export size tanpa ngubah preview ----
   function recalcExportSize() {
     let wmm = parseFloat(widthMmInput.value) || 56;
     let hmm = parseFloat(heightMmInput.value) || 88;
@@ -367,7 +426,6 @@
     pxInfo.textContent = `≈ ${exportWidthPx} × ${exportHeightPx} px (untuk export)`;
   }
 
-  // handler perubahan mm + lock ratio
   widthMmInput.addEventListener('input', () => {
     let wmm = parseFloat(widthMmInput.value);
     if (isNaN(wmm) || wmm <= 0) return;
@@ -392,10 +450,8 @@
     recalcExportSize();
   });
 
-  // pertama kali hitung
   recalcExportSize();
 
-  // helpers gambar
   function loadImageFromFile(file, cb) {
     const reader = new FileReader();
     reader.onload = () => {
@@ -406,13 +462,11 @@
     reader.readAsDataURL(file);
   }
 
-  // fungsi umum render ke canvas tertentu (preview / export)
   function renderToCanvas(c, ctx2d, w, h, fontScale = 1) {
     ctx2d.clearRect(0, 0, w, h);
     ctx2d.fillStyle = '#f3f4f6';
     ctx2d.fillRect(0, 0, w, h);
 
-    // template
     if (templateImg) {
       ctx2d.drawImage(templateImg, 0, 0, w, h);
     } else {
@@ -425,7 +479,6 @@
     }
 
     if (!photoImg) {
-      // placeholder lingkaran
       const d = (state.diameter / 100) * w;
       const cx = (state.centerX / 100) * w;
       const cy = (state.centerY / 100) * h;
@@ -474,24 +527,28 @@
   }
 
   function redrawPreview() {
-    // fontScale biar tulisan FOTO/KTM tetap enak meski preview kecil
-    const fontScale = PREVIEW_W / 661; // 661 px = default kira2
+    const fontScale = PREVIEW_W / 661;
     renderToCanvas(canvas, ctx, PREVIEW_W, PREVIEW_H, fontScale);
   }
 
-  // input file
+  // template input
   templateInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    templateNameSpan.textContent = file.name;
+    templateNameSpan.classList.remove('placeholder');
     loadImageFromFile(file, (img) => {
       templateImg = img;
       redrawPreview();
     });
   });
 
+  // photo input
   photoInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    photoNameSpan.textContent = file.name;
+    photoNameSpan.classList.remove('placeholder');
     loadImageFromFile(file, (img) => {
       photoImg = img;
       state.zoom = 1.0;
@@ -503,7 +560,6 @@
     });
   });
 
-  // slider bind
   function bindSlider(id, key) {
     const el = document.getElementById(id);
     const valSpan = document.getElementById(id + 'Val');
@@ -523,7 +579,6 @@
   bindSlider('diameter', 'diameter');
   bindSlider('zoom', 'zoom');
 
-  // pan buttons
   document.querySelectorAll('.xy-button-grid button[data-move]').forEach(btn => {
     btn.addEventListener('click', () => {
       if (!photoImg) return;
@@ -534,7 +589,6 @@
     });
   });
 
-  // drag dengan mouse di preview
   let isDragging = false;
   let dragStartX = 0;
   let dragStartY = 0;
@@ -565,7 +619,7 @@
     const side = baseSide / state.zoom;
     const d = (state.diameter / 100) * PREVIEW_W;
 
-    const factor = side / d; // konversi px preview -> px foto
+    const factor = side / d;
     state.offsetX = dragOffsetX0 + dxCanvas * factor;
     state.offsetY = dragOffsetY0 + dyCanvas * factor;
     redrawPreview();
@@ -574,7 +628,6 @@
   window.addEventListener('mouseup', () => { isDragging = false; });
   canvas.addEventListener('mouseleave', () => { isDragging = false; });
 
-  // reset posisi
   document.getElementById('resetBtn').addEventListener('click', () => {
     state.zoom = 1.0;
     state.offsetX = 0;
@@ -584,14 +637,11 @@
     redrawPreview();
   });
 
-  // download: render ke offscreen canvas ukuran exportWidthPx x exportHeightPx
   document.getElementById('downloadBtn').addEventListener('click', () => {
     const off = document.createElement('canvas');
     off.width = exportWidthPx;
     off.height = exportHeightPx;
     const offCtx = off.getContext('2d');
-
-    // fontScale untuk export = 1 (ukuran full)
     renderToCanvas(off, offCtx, exportWidthPx, exportHeightPx, 1);
 
     const link = document.createElement('a');
@@ -600,7 +650,6 @@
     link.click();
   });
 
-  // initial preview
   redrawPreview();
 </script>
 </body>
