@@ -184,9 +184,18 @@
       display: grid;
       grid-template-columns: repeat(3, minmax(0,1fr));
       gap: 8px;
+      align-items: end;
     }
     .inline-fields .field {
       margin-bottom: 0;
+    }
+    .lock-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: #4b5563;
+      margin-top: 2px;
     }
   </style>
 </head>
@@ -230,7 +239,11 @@
         <input id="dpi" type="number" min="72" max="600" step="1" value="300">
       </div>
     </div>
-    <div class="hint" id="pxInfo">≈ 661 × 1039 px</div>
+    <div class="lock-row">
+      <label><input id="lockRatio" type="checkbox" checked> Kunci rasio W/H</label>
+      <span id="ratioInfo">Rasio: 0.64</span>
+    </div>
+    <div class="hint" id="pxInfo">≈ 661 × 1039 px (hanya untuk hasil export, preview tetap)</div>
 
     <hr style="margin:8px 0;border:none;border-top:1px solid #e5e7eb;">
 
@@ -294,11 +307,15 @@
   <section class="card preview-card">
     <h2>Preview Kartu</h2>
     <canvas id="previewCanvas"></canvas>
-    <div class="hint">Upload template &amp; foto, lalu atur posisi sampai pas.</div>
+    <div class="hint">Preview ini ukuran tetap, cuma hasil download yang mengikuti mm &amp; DPI.</div>
   </section>
 </main>
 
 <script>
+  // ==== KONFIG PREVIEW ====
+  const PREVIEW_W = 330;  // kira² rasio 56x88, tapi ukuran kecil
+  const PREVIEW_H = 520;
+
   const templateInput = document.getElementById('templateInput');
   const photoInput = document.getElementById('photoInput');
   const canvas = document.getElementById('previewCanvas');
@@ -307,49 +324,78 @@
   const widthMmInput = document.getElementById('widthMm');
   const heightMmInput = document.getElementById('heightMm');
   const dpiInput = document.getElementById('dpi');
+  const lockRatioInput = document.getElementById('lockRatio');
   const pxInfo = document.getElementById('pxInfo');
+  const ratioInfo = document.getElementById('ratioInfo');
+
+  canvas.width = PREVIEW_W;
+  canvas.height = PREVIEW_H;
 
   let templateImg = null;
   let photoImg = null;
+
+  // nilai resolusi export (px)
+  let exportWidthPx = 661;
+  let exportHeightPx = 1039;
+  let aspectRatio = parseFloat(widthMmInput.value) / parseFloat(heightMmInput.value); // W/H
 
   const state = {
     centerX: 50,
     centerY: 25,
     diameter: 42,
     zoom: 1.0,
-    offsetX: 0,   // dalam satuan pixel foto
+    offsetX: 0,
     offsetY: 0
   };
 
-  // ---- ukuran canvas dari mm + dpi ----
-  function updateCanvasSizeFromMm() {
+  // ---- helper hitung export size tanpa ngubah preview ----
+  function recalcExportSize() {
     let wmm = parseFloat(widthMmInput.value) || 56;
     let hmm = parseFloat(heightMmInput.value) || 88;
     let dpi = parseInt(dpiInput.value, 10) || 300;
 
-    // batasi sedikit biar gak terlalu ekstrem
     if (dpi < 72) dpi = 72;
     if (dpi > 600) dpi = 600;
     dpiInput.value = dpi;
 
-    const wpx = Math.round(wmm / 25.4 * dpi);
-    const hpx = Math.round(hmm / 25.4 * dpi);
+    exportWidthPx = Math.round(wmm / 25.4 * dpi);
+    exportHeightPx = Math.round(hmm / 25.4 * dpi);
 
-    canvas.width = wpx;
-    canvas.height = hpx;
+    aspectRatio = wmm / hmm;
+    ratioInfo.textContent = "Rasio: " + aspectRatio.toFixed(2);
 
-    pxInfo.textContent = `≈ ${wpx} × ${hpx} px`;
-    redraw();
+    pxInfo.textContent = `≈ ${exportWidthPx} × ${exportHeightPx} px (untuk export)`;
   }
 
-  widthMmInput.addEventListener('input', updateCanvasSizeFromMm);
-  heightMmInput.addEventListener('input', updateCanvasSizeFromMm);
-  dpiInput.addEventListener('input', updateCanvasSizeFromMm);
+  // handler perubahan mm + lock ratio
+  widthMmInput.addEventListener('input', () => {
+    let wmm = parseFloat(widthMmInput.value);
+    if (isNaN(wmm) || wmm <= 0) return;
+    if (lockRatioInput.checked) {
+      let hmm = wmm / aspectRatio;
+      heightMmInput.value = hmm.toFixed(2).replace(/\.00$/, '');
+    }
+    recalcExportSize();
+  });
 
-  // default awal (56x88mm, 300dpi)
-  updateCanvasSizeFromMm();
+  heightMmInput.addEventListener('input', () => {
+    let hmm = parseFloat(heightMmInput.value);
+    if (isNaN(hmm) || hmm <= 0) return;
+    if (lockRatioInput.checked) {
+      let wmm = hmm * aspectRatio;
+      widthMmInput.value = wmm.toFixed(2).replace(/\.00$/, '');
+    }
+    recalcExportSize();
+  });
 
-  // helpers
+  dpiInput.addEventListener('input', () => {
+    recalcExportSize();
+  });
+
+  // pertama kali hitung
+  recalcExportSize();
+
+  // helpers gambar
   function loadImageFromFile(file, cb) {
     const reader = new FileReader();
     reader.onload = () => {
@@ -360,43 +406,43 @@
     reader.readAsDataURL(file);
   }
 
-  function redraw() {
-    // clear
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#f3f4f6';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  // fungsi umum render ke canvas tertentu (preview / export)
+  function renderToCanvas(c, ctx2d, w, h, fontScale = 1) {
+    ctx2d.clearRect(0, 0, w, h);
+    ctx2d.fillStyle = '#f3f4f6';
+    ctx2d.fillRect(0, 0, w, h);
 
     // template
     if (templateImg) {
-      ctx.drawImage(templateImg, 0, 0, canvas.width, canvas.height);
+      ctx2d.drawImage(templateImg, 0, 0, w, h);
     } else {
-      ctx.fillStyle = '#d1d5db';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = '#9ca3af';
-      ctx.font = 'bold 32px system-ui';
-      ctx.textAlign = 'center';
-      ctx.fillText('KTM', canvas.width / 2, canvas.height * 0.7);
+      ctx2d.fillStyle = '#d1d5db';
+      ctx2d.fillRect(0, 0, w, h);
+      ctx2d.fillStyle = '#9ca3af';
+      ctx2d.font = `${32 * fontScale}px system-ui`;
+      ctx2d.textAlign = 'center';
+      ctx2d.fillText('KTM', w / 2, h * 0.7);
     }
 
     if (!photoImg) {
       // placeholder lingkaran
-      const d = (state.diameter / 100) * canvas.width;
-      const cx = (state.centerX / 100) * canvas.width;
-      const cy = (state.centerY / 100) * canvas.height;
-      ctx.fillStyle = '#9ca3af';
-      ctx.beginPath();
-      ctx.arc(cx, cy, d / 2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#111827';
-      ctx.font = 'bold 24px system-ui';
-      ctx.textAlign = 'center';
-      ctx.fillText('FOTO', cx, cy + 8);
+      const d = (state.diameter / 100) * w;
+      const cx = (state.centerX / 100) * w;
+      const cy = (state.centerY / 100) * h;
+      ctx2d.fillStyle = '#9ca3af';
+      ctx2d.beginPath();
+      ctx2d.arc(cx, cy, d / 2, 0, Math.PI * 2);
+      ctx2d.fill();
+      ctx2d.fillStyle = '#111827';
+      ctx2d.font = `${24 * fontScale}px system-ui`;
+      ctx2d.textAlign = 'center';
+      ctx2d.fillText('FOTO', cx, cy + 8 * fontScale);
       return;
     }
 
-    const d = (state.diameter / 100) * canvas.width;
-    const cx = (state.centerX / 100) * canvas.width;
-    const cy = (state.centerY / 100) * canvas.height;
+    const d = (state.diameter / 100) * w;
+    const cx = (state.centerX / 100) * w;
+    const cy = (state.centerY / 100) * h;
 
     const pw = photoImg.width;
     const ph = photoImg.height;
@@ -413,27 +459,33 @@
     if (sx + side > pw) sx = pw - side;
     if (sy + side > ph) sy = ph - side;
 
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(cx, cy, d / 2, 0, Math.PI * 2);
-    ctx.clip();
+    ctx2d.save();
+    ctx2d.beginPath();
+    ctx2d.arc(cx, cy, d / 2, 0, Math.PI * 2);
+    ctx2d.clip();
 
-    ctx.drawImage(
+    ctx2d.drawImage(
       photoImg,
       sx, sy, side, side,
       cx - d / 2, cy - d / 2, d, d
     );
 
-    ctx.restore();
+    ctx2d.restore();
   }
 
-  // input handlers
+  function redrawPreview() {
+    // fontScale biar tulisan FOTO/KTM tetap enak meski preview kecil
+    const fontScale = PREVIEW_W / 661; // 661 px = default kira2
+    renderToCanvas(canvas, ctx, PREVIEW_W, PREVIEW_H, fontScale);
+  }
+
+  // input file
   templateInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
     loadImageFromFile(file, (img) => {
       templateImg = img;
-      redraw();
+      redrawPreview();
     });
   });
 
@@ -442,16 +494,16 @@
     if (!file) return;
     loadImageFromFile(file, (img) => {
       photoImg = img;
-      // reset posisi saat ganti foto
       state.zoom = 1.0;
       state.offsetX = 0;
       state.offsetY = 0;
       document.getElementById('zoom').value = 100;
       document.getElementById('zoomVal').textContent = 100;
-      redraw();
+      redrawPreview();
     });
   });
 
+  // slider bind
   function bindSlider(id, key) {
     const el = document.getElementById(id);
     const valSpan = document.getElementById(id + 'Val');
@@ -463,10 +515,9 @@
       } else {
         state[key] = v;
       }
-      redraw();
+      redrawPreview();
     });
   }
-
   bindSlider('centerX', 'centerX');
   bindSlider('centerY', 'centerY');
   bindSlider('diameter', 'diameter');
@@ -479,11 +530,11 @@
       const [dx, dy] = btn.dataset.move.split(',').map(Number);
       state.offsetX += dx;
       state.offsetY += dy;
-      redraw();
+      redrawPreview();
     });
   });
 
-  // drag with mouse di atas canvas
+  // drag dengan mouse di preview
   let isDragging = false;
   let dragStartX = 0;
   let dragStartY = 0;
@@ -512,41 +563,45 @@
     const ph = photoImg.height;
     const baseSide = Math.min(pw, ph);
     const side = baseSide / state.zoom;
-    const d = (state.diameter / 100) * canvas.width;
+    const d = (state.diameter / 100) * PREVIEW_W;
 
-    const factor = side / d; // konversi px canvas -> px foto
+    const factor = side / d; // konversi px preview -> px foto
     state.offsetX = dragOffsetX0 + dxCanvas * factor;
     state.offsetY = dragOffsetY0 + dyCanvas * factor;
-    redraw();
+    redrawPreview();
   });
 
-  window.addEventListener('mouseup', () => {
-    isDragging = false;
-  });
-  canvas.addEventListener('mouseleave', () => {
-    isDragging = false;
-  });
+  window.addEventListener('mouseup', () => { isDragging = false; });
+  canvas.addEventListener('mouseleave', () => { isDragging = false; });
 
-  // reset
+  // reset posisi
   document.getElementById('resetBtn').addEventListener('click', () => {
     state.zoom = 1.0;
     state.offsetX = 0;
     state.offsetY = 0;
     document.getElementById('zoom').value = 100;
     document.getElementById('zoomVal').textContent = 100;
-    redraw();
+    redrawPreview();
   });
 
-  // download
+  // download: render ke offscreen canvas ukuran exportWidthPx x exportHeightPx
   document.getElementById('downloadBtn').addEventListener('click', () => {
+    const off = document.createElement('canvas');
+    off.width = exportWidthPx;
+    off.height = exportHeightPx;
+    const offCtx = off.getContext('2d');
+
+    // fontScale untuk export = 1 (ukuran full)
+    renderToCanvas(off, offCtx, exportWidthPx, exportHeightPx, 1);
+
     const link = document.createElement('a');
     link.download = 'idcard_ut.png';
-    link.href = canvas.toDataURL('image/png');
+    link.href = off.toDataURL('image/png');
     link.click();
   });
 
-  // initial render
-  redraw();
+  // initial preview
+  redrawPreview();
 </script>
 </body>
 </html>
