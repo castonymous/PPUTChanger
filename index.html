@@ -155,6 +155,8 @@
       border-radius: 16px;
       border: 1px dashed #e5e7eb;
       max-width: 100%;
+      width: 100%;
+      height: auto;
     }
     .hint {
       font-size: 11px;
@@ -176,6 +178,15 @@
     }
     .xy-button-grid button.blank {
       visibility: hidden;
+    }
+
+    .inline-fields {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0,1fr));
+      gap: 8px;
+    }
+    .inline-fields .field {
+      margin-bottom: 0;
     }
   </style>
 </head>
@@ -201,6 +212,25 @@
       <label>Foto — PNG/JPG (background polos)</label>
       <input id="photoInput" type="file" accept="image/*" />
     </div>
+
+    <hr style="margin:8px 0;border:none;border-top:1px solid #e5e7eb;">
+
+    <h2 style="margin-top:4px;">Pengaturan Export <span class="tag">mm &amp; DPI</span></h2>
+    <div class="inline-fields">
+      <div class="field">
+        <label>Lebar (mm)</label>
+        <input id="widthMm" type="number" min="10" max="200" step="0.1" value="56">
+      </div>
+      <div class="field">
+        <label>Tinggi (mm)</label>
+        <input id="heightMm" type="number" min="10" max="200" step="0.1" value="88">
+      </div>
+      <div class="field">
+        <label>DPI</label>
+        <input id="dpi" type="number" min="72" max="600" step="1" value="300">
+      </div>
+    </div>
+    <div class="hint" id="pxInfo">≈ 661 × 1039 px</div>
 
     <hr style="margin:8px 0;border:none;border-top:1px solid #e5e7eb;">
 
@@ -238,7 +268,7 @@
       </div>
     </div>
     <div class="field">
-      <label>Geser Foto</label>
+      <label>Geser Foto (panah / drag dengan mouse)</label>
       <div class="xy-button-grid">
         <button class="blank"></button>
         <button type="button" data-move="0,-10">↑</button>
@@ -250,7 +280,7 @@
         <button type="button" data-move="0,10">↓</button>
         <button class="blank"></button>
       </div>
-      <div class="hint">Setiap klik panah menggeser ±10px relatif terhadap foto.</div>
+      <div class="hint">Klik &amp; drag langsung di foto untuk menggeser dengan bebas.</div>
     </div>
 
     <div class="controls-grid">
@@ -263,7 +293,7 @@
   <!-- PANEL KANAN: PREVIEW -->
   <section class="card preview-card">
     <h2>Preview Kartu</h2>
-    <canvas id="previewCanvas" width="661" height="1039"></canvas>
+    <canvas id="previewCanvas"></canvas>
     <div class="hint">Upload template &amp; foto, lalu atur posisi sampai pas.</div>
   </section>
 </main>
@@ -274,6 +304,11 @@
   const canvas = document.getElementById('previewCanvas');
   const ctx = canvas.getContext('2d');
 
+  const widthMmInput = document.getElementById('widthMm');
+  const heightMmInput = document.getElementById('heightMm');
+  const dpiInput = document.getElementById('dpi');
+  const pxInfo = document.getElementById('pxInfo');
+
   let templateImg = null;
   let photoImg = null;
 
@@ -282,9 +317,37 @@
     centerY: 25,
     diameter: 42,
     zoom: 1.0,
-    offsetX: 0,
-    offsetY: 0,
+    offsetX: 0,   // dalam satuan pixel foto
+    offsetY: 0
   };
+
+  // ---- ukuran canvas dari mm + dpi ----
+  function updateCanvasSizeFromMm() {
+    let wmm = parseFloat(widthMmInput.value) || 56;
+    let hmm = parseFloat(heightMmInput.value) || 88;
+    let dpi = parseInt(dpiInput.value, 10) || 300;
+
+    // batasi sedikit biar gak terlalu ekstrem
+    if (dpi < 72) dpi = 72;
+    if (dpi > 600) dpi = 600;
+    dpiInput.value = dpi;
+
+    const wpx = Math.round(wmm / 25.4 * dpi);
+    const hpx = Math.round(hmm / 25.4 * dpi);
+
+    canvas.width = wpx;
+    canvas.height = hpx;
+
+    pxInfo.textContent = `≈ ${wpx} × ${hpx} px`;
+    redraw();
+  }
+
+  widthMmInput.addEventListener('input', updateCanvasSizeFromMm);
+  heightMmInput.addEventListener('input', updateCanvasSizeFromMm);
+  dpiInput.addEventListener('input', updateCanvasSizeFromMm);
+
+  // default awal (56x88mm, 300dpi)
+  updateCanvasSizeFromMm();
 
   // helpers
   function loadImageFromFile(file, cb) {
@@ -307,7 +370,6 @@
     if (templateImg) {
       ctx.drawImage(templateImg, 0, 0, canvas.width, canvas.height);
     } else {
-      // placeholder KTM
       ctx.fillStyle = '#d1d5db';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.fillStyle = '#9ca3af';
@@ -332,7 +394,6 @@
       return;
     }
 
-    // gambar foto di lingkaran
     const d = (state.diameter / 100) * canvas.width;
     const cx = (state.centerX / 100) * canvas.width;
     const cy = (state.centerY / 100) * canvas.height;
@@ -381,6 +442,12 @@
     if (!file) return;
     loadImageFromFile(file, (img) => {
       photoImg = img;
+      // reset posisi saat ganti foto
+      state.zoom = 1.0;
+      state.offsetX = 0;
+      state.offsetY = 0;
+      document.getElementById('zoom').value = 100;
+      document.getElementById('zoomVal').textContent = 100;
       redraw();
     });
   });
@@ -408,11 +475,56 @@
   // pan buttons
   document.querySelectorAll('.xy-button-grid button[data-move]').forEach(btn => {
     btn.addEventListener('click', () => {
+      if (!photoImg) return;
       const [dx, dy] = btn.dataset.move.split(',').map(Number);
       state.offsetX += dx;
       state.offsetY += dy;
       redraw();
     });
+  });
+
+  // drag with mouse di atas canvas
+  let isDragging = false;
+  let dragStartX = 0;
+  let dragStartY = 0;
+  let dragOffsetX0 = 0;
+  let dragOffsetY0 = 0;
+
+  canvas.addEventListener('mousedown', (e) => {
+    if (!photoImg) return;
+    isDragging = true;
+    const rect = canvas.getBoundingClientRect();
+    dragStartX = e.clientX - rect.left;
+    dragStartY = e.clientY - rect.top;
+    dragOffsetX0 = state.offsetX;
+    dragOffsetY0 = state.offsetY;
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (!isDragging || !photoImg) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const dxCanvas = x - dragStartX;
+    const dyCanvas = y - dragStartY;
+
+    const pw = photoImg.width;
+    const ph = photoImg.height;
+    const baseSide = Math.min(pw, ph);
+    const side = baseSide / state.zoom;
+    const d = (state.diameter / 100) * canvas.width;
+
+    const factor = side / d; // konversi px canvas -> px foto
+    state.offsetX = dragOffsetX0 + dxCanvas * factor;
+    state.offsetY = dragOffsetY0 + dyCanvas * factor;
+    redraw();
+  });
+
+  window.addEventListener('mouseup', () => {
+    isDragging = false;
+  });
+  canvas.addEventListener('mouseleave', () => {
+    isDragging = false;
   });
 
   // reset
