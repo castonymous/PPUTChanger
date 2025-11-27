@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <title>ID Card Circle Generator - UT Style</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --ut-blue: #004b8d;
+      --ut-yellow: #ffd200;
+      --bg-light: #f5f7fb;
+      --border-soft: #d7dce8;
+    }
+    * { box-sizing: border-box; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body {
+      margin: 0;
+      background: var(--bg-light);
+      color: #111827;
+    }
+    header {
+      background: linear-gradient(90deg, var(--ut-blue), #062b5b);
+      color: white;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    header .logo-circle {
+      width: 40px; height: 40px; border-radius: 999px;
+      border: 2px solid var(--ut-yellow);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; font-weight: 700;
+      background: rgba(255,255,255,0.1);
+    }
+    header .titles { line-height: 1.2; }
+    header .titles .main { font-weight: 600; font-size: 18px; }
+    header .titles .sub { font-size: 13px; opacity: .9; }
+
+    main {
+      max-width: 1200px;
+      margin: 24px auto;
+      padding: 0 16px 32px;
+      display: grid;
+      grid-template-columns: minmax(0, 360px) minmax(0, 1fr);
+      gap: 16px;
+    }
+    @media (max-width: 900px) {
+      main { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      background: white;
+      border-radius: 16px;
+      border: 1px solid var(--border-soft);
+      box-shadow: 0 8px 24px rgba(15,23,42,0.08);
+      padding: 16px 18px 18px;
+    }
+    .card h2 {
+      margin: 0 0 8px;
+      font-size: 17px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card h2 span.tag {
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: rgba(0,75,141,0.06);
+      color: var(--ut-blue);
+      border: 1px solid rgba(0,75,141,0.18);
+    }
+    .field {
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+    .field label {
+      display: block;
+      margin-bottom: 2px;
+      color: #4b5563;
+    }
+    .field input[type="number"],
+    .field input[type="text"],
+    .field select {
+      width: 100%;
+      padding: 6px 8px;
+      border-radius: 8px;
+      border: 1px solid #d1d5db;
+      font-size: 13px;
+      outline: none;
+    }
+    .field input[type="number"]:focus,
+    .field input[type="text"]:focus,
+    .field select:focus {
+      border-color: var(--ut-blue);
+      box-shadow: 0 0 0 1px rgba(0,75,141,0.15);
+    }
+    .field input[type="file"] {
+      font-size: 13px;
+    }
+
+    .range-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .range-row input[type="range"] {
+      flex: 1;
+    }
+    .range-row span {
+      font-size: 12px;
+      color: #4b5563;
+      width: 60px;
+      text-align: right;
+    }
+
+    .controls-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0,1fr));
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    button {
+      border-radius: 999px;
+      border: 1px solid transparent;
+      padding: 6px 12px;
+      font-size: 13px;
+      cursor: pointer;
+      background: #e5e7eb;
+    }
+    button.primary {
+      background: var(--ut-blue);
+      color: white;
+    }
+    button.primary:hover { background: #063b74; }
+    button.outline {
+      background: white;
+      border-color: #d1d5db;
+    }
+    button.outline:hover { background: #f3f4f6; }
+
+    .preview-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+    canvas {
+      background: #f3f4f6;
+      border-radius: 16px;
+      border: 1px dashed #e5e7eb;
+      max-width: 100%;
+    }
+    .hint {
+      font-size: 11px;
+      color: #6b7280;
+      margin-top: 4px;
+      text-align: center;
+    }
+    .xy-button-grid {
+      display: inline-grid;
+      grid-template-columns: repeat(3, 26px);
+      grid-auto-rows: 26px;
+      gap: 2px;
+      margin-top: 4px;
+    }
+    .xy-button-grid button {
+      padding: 0;
+      font-size: 12px;
+      border-radius: 8px;
+    }
+    .xy-button-grid button.blank {
+      visibility: hidden;
+    }
+  </style>
+</head>
+<body>
+<header>
+  <div class="logo-circle">UT</div>
+  <div class="titles">
+    <div class="main">ID Card Circle Generator</div>
+    <div class="sub">Universitas Terbuka style · Client-side (no upload ke server)</div>
+  </div>
+</header>
+
+<main>
+  <!-- PANEL KIRI: KONTROL -->
+  <section class="card">
+    <h2>Pengaturan <span class="tag">Template &amp; Foto</span></h2>
+
+    <div class="field">
+      <label>Template (KTM) — PNG/JPG</label>
+      <input id="templateInput" type="file" accept="image/*" />
+    </div>
+    <div class="field">
+      <label>Foto — PNG/JPG (background polos)</label>
+      <input id="photoInput" type="file" accept="image/*" />
+    </div>
+
+    <hr style="margin:8px 0;border:none;border-top:1px solid #e5e7eb;">
+
+    <h2 style="margin-top:4px;">Lingkaran Foto</h2>
+    <div class="field">
+      <label>Center X (% lebar template)</label>
+      <div class="range-row">
+        <input id="centerX" type="range" min="0" max="100" value="50">
+        <span><span id="centerXVal">50</span>%</span>
+      </div>
+    </div>
+    <div class="field">
+      <label>Center Y (% tinggi template)</label>
+      <div class="range-row">
+        <input id="centerY" type="range" min="0" max="100" value="25">
+        <span><span id="centerYVal">25</span>%</span>
+      </div>
+    </div>
+    <div class="field">
+      <label>Diameter (% lebar template)</label>
+      <div class="range-row">
+        <input id="diameter" type="range" min="10" max="80" value="42">
+        <span><span id="diameterVal">42</span>%</span>
+      </div>
+    </div>
+
+    <hr style="margin:8px 0;border:none;border-top:1px solid #e5e7eb;">
+
+    <h2 style="margin-top:4px;">Posisi Foto</h2>
+    <div class="field">
+      <label>Zoom Foto</label>
+      <div class="range-row">
+        <input id="zoom" type="range" min="50" max="300" value="100">
+        <span><span id="zoomVal">100</span>%</span>
+      </div>
+    </div>
+    <div class="field">
+      <label>Geser Foto</label>
+      <div class="xy-button-grid">
+        <button class="blank"></button>
+        <button type="button" data-move="0,-10">↑</button>
+        <button class="blank"></button>
+        <button type="button" data-move="-10,0">←</button>
+        <button class="blank" disabled></button>
+        <button type="button" data-move="10,0">→</button>
+        <button class="blank"></button>
+        <button type="button" data-move="0,10">↓</button>
+        <button class="blank"></button>
+      </div>
+      <div class="hint">Setiap klik panah menggeser ±10px relatif terhadap foto.</div>
+    </div>
+
+    <div class="controls-grid">
+      <button id="resetBtn" type="button" class="outline">Reset Posisi</button>
+      <button id="downloadBtn" type="button" class="primary">Download PNG</button>
+    </div>
+    <div class="hint">Semua proses jalan di browser kamu (aman buat data mahasiswa).</div>
+  </section>
+
+  <!-- PANEL KANAN: PREVIEW -->
+  <section class="card preview-card">
+    <h2>Preview Kartu</h2>
+    <canvas id="previewCanvas" width="661" height="1039"></canvas>
+    <div class="hint">Upload template &amp; foto, lalu atur posisi sampai pas.</div>
+  </section>
+</main>
+
+<script>
+  const templateInput = document.getElementById('templateInput');
+  const photoInput = document.getElementById('photoInput');
+  const canvas = document.getElementById('previewCanvas');
+  const ctx = canvas.getContext('2d');
+
+  let templateImg = null;
+  let photoImg = null;
+
+  const state = {
+    centerX: 50,
+    centerY: 25,
+    diameter: 42,
+    zoom: 1.0,
+    offsetX: 0,
+    offsetY: 0,
+  };
+
+  // helpers
+  function loadImageFromFile(file, cb) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => cb(img);
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function redraw() {
+    // clear
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#f3f4f6';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // template
+    if (templateImg) {
+      ctx.drawImage(templateImg, 0, 0, canvas.width, canvas.height);
+    } else {
+      // placeholder KTM
+      ctx.fillStyle = '#d1d5db';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#9ca3af';
+      ctx.font = 'bold 32px system-ui';
+      ctx.textAlign = 'center';
+      ctx.fillText('KTM', canvas.width / 2, canvas.height * 0.7);
+    }
+
+    if (!photoImg) {
+      // placeholder lingkaran
+      const d = (state.diameter / 100) * canvas.width;
+      const cx = (state.centerX / 100) * canvas.width;
+      const cy = (state.centerY / 100) * canvas.height;
+      ctx.fillStyle = '#9ca3af';
+      ctx.beginPath();
+      ctx.arc(cx, cy, d / 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#111827';
+      ctx.font = 'bold 24px system-ui';
+      ctx.textAlign = 'center';
+      ctx.fillText('FOTO', cx, cy + 8);
+      return;
+    }
+
+    // gambar foto di lingkaran
+    const d = (state.diameter / 100) * canvas.width;
+    const cx = (state.centerX / 100) * canvas.width;
+    const cy = (state.centerY / 100) * canvas.height;
+
+    const pw = photoImg.width;
+    const ph = photoImg.height;
+    const baseSide = Math.min(pw, ph);
+    const side = baseSide / state.zoom;
+
+    const cxImg = pw / 2 + state.offsetX;
+    const cyImg = ph / 2 + state.offsetY;
+    let sx = cxImg - side / 2;
+    let sy = cyImg - side / 2;
+
+    if (sx < 0) sx = 0;
+    if (sy < 0) sy = 0;
+    if (sx + side > pw) sx = pw - side;
+    if (sy + side > ph) sy = ph - side;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, d / 2, 0, Math.PI * 2);
+    ctx.clip();
+
+    ctx.drawImage(
+      photoImg,
+      sx, sy, side, side,
+      cx - d / 2, cy - d / 2, d, d
+    );
+
+    ctx.restore();
+  }
+
+  // input handlers
+  templateInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    loadImageFromFile(file, (img) => {
+      templateImg = img;
+      redraw();
+    });
+  });
+
+  photoInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    loadImageFromFile(file, (img) => {
+      photoImg = img;
+      redraw();
+    });
+  });
+
+  function bindSlider(id, key) {
+    const el = document.getElementById(id);
+    const valSpan = document.getElementById(id + 'Val');
+    el.addEventListener('input', () => {
+      const v = Number(el.value);
+      valSpan.textContent = v;
+      if (key === 'zoom') {
+        state.zoom = v / 100;
+      } else {
+        state[key] = v;
+      }
+      redraw();
+    });
+  }
+
+  bindSlider('centerX', 'centerX');
+  bindSlider('centerY', 'centerY');
+  bindSlider('diameter', 'diameter');
+  bindSlider('zoom', 'zoom');
+
+  // pan buttons
+  document.querySelectorAll('.xy-button-grid button[data-move]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const [dx, dy] = btn.dataset.move.split(',').map(Number);
+      state.offsetX += dx;
+      state.offsetY += dy;
+      redraw();
+    });
+  });
+
+  // reset
+  document.getElementById('resetBtn').addEventListener('click', () => {
+    state.zoom = 1.0;
+    state.offsetX = 0;
+    state.offsetY = 0;
+    document.getElementById('zoom').value = 100;
+    document.getElementById('zoomVal').textContent = 100;
+    redraw();
+  });
+
+  // download
+  document.getElementById('downloadBtn').addEventListener('click', () => {
+    const link = document.createElement('a');
+    link.download = 'idcard_ut.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  });
+
+  // initial render
+  redraw();
+</script>
+</body>
+</html>
