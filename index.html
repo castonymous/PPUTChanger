@@ -369,6 +369,288 @@
   </section>
 </main>
 
-<script src="app-obf.js"></script>
+<script>
+  // ==== KONFIG PREVIEW ====
+  const PREVIEW_W = 330;
+  const PREVIEW_H = 520;
+
+  const templateInput = document.getElementById('templateInput');
+  const photoInput = document.getElementById('photoInput');
+  const templateNameSpan = document.getElementById('templateName');
+  const photoNameSpan = document.getElementById('photoName');
+
+  const canvas = document.getElementById('previewCanvas');
+  const ctx = canvas.getContext('2d');
+
+  const widthMmInput = document.getElementById('widthMm');
+  const heightMmInput = document.getElementById('heightMm');
+  const dpiInput = document.getElementById('dpi');
+  const lockRatioInput = document.getElementById('lockRatio');
+  const pxInfo = document.getElementById('pxInfo');
+  const ratioInfo = document.getElementById('ratioInfo');
+
+  canvas.width = PREVIEW_W;
+  canvas.height = PREVIEW_H;
+
+  let templateImg = null;
+  let photoImg = null;
+
+  let exportWidthPx = 661;
+  let exportHeightPx = 1039;
+  let aspectRatio = parseFloat(widthMmInput.value) / parseFloat(heightMmInput.value);
+
+  const state = {
+    centerX: 50,
+    centerY: 25,
+    diameter: 42,
+    zoom: 1.0,
+    offsetX: 0,
+    offsetY: 0
+  };
+
+  function recalcExportSize() {
+    let wmm = parseFloat(widthMmInput.value) || 56;
+    let hmm = parseFloat(heightMmInput.value) || 88;
+    let dpi = parseInt(dpiInput.value, 10) || 300;
+
+    if (dpi < 72) dpi = 72;
+    if (dpi > 600) dpi = 600;
+    dpiInput.value = dpi;
+
+    exportWidthPx = Math.round(wmm / 25.4 * dpi);
+    exportHeightPx = Math.round(hmm / 25.4 * dpi);
+
+    aspectRatio = wmm / hmm;
+    ratioInfo.textContent = "Rasio: " + aspectRatio.toFixed(2);
+
+    pxInfo.textContent = `≈ ${exportWidthPx} × ${exportHeightPx} px (untuk export)`;
+  }
+
+  widthMmInput.addEventListener('input', () => {
+    let wmm = parseFloat(widthMmInput.value);
+    if (isNaN(wmm) || wmm <= 0) return;
+    if (lockRatioInput.checked) {
+      let hmm = wmm / aspectRatio;
+      heightMmInput.value = hmm.toFixed(2).replace(/\.00$/, '');
+    }
+    recalcExportSize();
+  });
+
+  heightMmInput.addEventListener('input', () => {
+    let hmm = parseFloat(heightMmInput.value);
+    if (isNaN(hmm) || hmm <= 0) return;
+    if (lockRatioInput.checked) {
+      let wmm = hmm * aspectRatio;
+      widthMmInput.value = wmm.toFixed(2).replace(/\.00$/, '');
+    }
+    recalcExportSize();
+  });
+
+  dpiInput.addEventListener('input', () => {
+    recalcExportSize();
+  });
+
+  recalcExportSize();
+
+  function loadImageFromFile(file, cb) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => cb(img);
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function renderToCanvas(c, ctx2d, w, h, fontScale = 1) {
+    ctx2d.clearRect(0, 0, w, h);
+    ctx2d.fillStyle = '#f3f4f6';
+    ctx2d.fillRect(0, 0, w, h);
+
+    if (templateImg) {
+      ctx2d.drawImage(templateImg, 0, 0, w, h);
+    } else {
+      ctx2d.fillStyle = '#d1d5db';
+      ctx2d.fillRect(0, 0, w, h);
+      ctx2d.fillStyle = '#9ca3af';
+      ctx2d.font = `${32 * fontScale}px system-ui`;
+      ctx2d.textAlign = 'center';
+      ctx2d.fillText('KTM', w / 2, h * 0.7);
+    }
+
+    if (!photoImg) {
+      const d = (state.diameter / 100) * w;
+      const cx = (state.centerX / 100) * w;
+      const cy = (state.centerY / 100) * h;
+      ctx2d.fillStyle = '#9ca3af';
+      ctx2d.beginPath();
+      ctx2d.arc(cx, cy, d / 2, 0, Math.PI * 2);
+      ctx2d.fill();
+      ctx2d.fillStyle = '#111827';
+      ctx2d.font = `${24 * fontScale}px system-ui`;
+      ctx2d.textAlign = 'center';
+      ctx2d.fillText('FOTO', cx, cy + 8 * fontScale);
+      return;
+    }
+
+    const d = (state.diameter / 100) * w;
+    const cx = (state.centerX / 100) * w;
+    const cy = (state.centerY / 100) * h;
+
+    const pw = photoImg.width;
+    const ph = photoImg.height;
+    const baseSide = Math.min(pw, ph);
+    const side = baseSide / state.zoom;
+
+    const cxImg = pw / 2 + state.offsetX;
+    const cyImg = ph / 2 + state.offsetY;
+    let sx = cxImg - side / 2;
+    let sy = cyImg - side / 2;
+
+    if (sx < 0) sx = 0;
+    if (sy < 0) sy = 0;
+    if (sx + side > pw) sx = pw - side;
+    if (sy + side > ph) sy = ph - side;
+
+    ctx2d.save();
+    ctx2d.beginPath();
+    ctx2d.arc(cx, cy, d / 2, 0, Math.PI * 2);
+    ctx2d.clip();
+
+    ctx2d.drawImage(
+      photoImg,
+      sx, sy, side, side,
+      cx - d / 2, cy - d / 2, d, d
+    );
+
+    ctx2d.restore();
+  }
+
+  function redrawPreview() {
+    const fontScale = PREVIEW_W / 661;
+    renderToCanvas(canvas, ctx, PREVIEW_W, PREVIEW_H, fontScale);
+  }
+
+  // template input
+  templateInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    templateNameSpan.textContent = file.name;
+    templateNameSpan.classList.remove('placeholder');
+    loadImageFromFile(file, (img) => {
+      templateImg = img;
+      redrawPreview();
+    });
+  });
+
+  // photo input
+  photoInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    photoNameSpan.textContent = file.name;
+    photoNameSpan.classList.remove('placeholder');
+    loadImageFromFile(file, (img) => {
+      photoImg = img;
+      state.zoom = 1.0;
+      state.offsetX = 0;
+      state.offsetY = 0;
+      document.getElementById('zoom').value = 100;
+      document.getElementById('zoomVal').textContent = 100;
+      redrawPreview();
+    });
+  });
+
+  function bindSlider(id, key) {
+    const el = document.getElementById(id);
+    const valSpan = document.getElementById(id + 'Val');
+    el.addEventListener('input', () => {
+      const v = Number(el.value);
+      valSpan.textContent = v;
+      if (key === 'zoom') {
+        state.zoom = v / 100;
+      } else {
+        state[key] = v;
+      }
+      redrawPreview();
+    });
+  }
+  bindSlider('centerX', 'centerX');
+  bindSlider('centerY', 'centerY');
+  bindSlider('diameter', 'diameter');
+  bindSlider('zoom', 'zoom');
+
+  document.querySelectorAll('.xy-button-grid button[data-move]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!photoImg) return;
+      const [dx, dy] = btn.dataset.move.split(',').map(Number);
+      state.offsetX += dx;
+      state.offsetY += dy;
+      redrawPreview();
+    });
+  });
+
+  let isDragging = false;
+  let dragStartX = 0;
+  let dragStartY = 0;
+  let dragOffsetX0 = 0;
+  let dragOffsetY0 = 0;
+
+  canvas.addEventListener('mousedown', (e) => {
+    if (!photoImg) return;
+    isDragging = true;
+    const rect = canvas.getBoundingClientRect();
+    dragStartX = e.clientX - rect.left;
+    dragStartY = e.clientY - rect.top;
+    dragOffsetX0 = state.offsetX;
+    dragOffsetY0 = state.offsetY;
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (!isDragging || !photoImg) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const dxCanvas = x - dragStartX;
+    const dyCanvas = y - dragStartY;
+
+    const pw = photoImg.width;
+    const ph = photoImg.height;
+    const baseSide = Math.min(pw, ph);
+    const side = baseSide / state.zoom;
+    const d = (state.diameter / 100) * PREVIEW_W;
+
+    const factor = side / d;
+    state.offsetX = dragOffsetX0 + dxCanvas * factor;
+    state.offsetY = dragOffsetY0 + dyCanvas * factor;
+    redrawPreview();
+  });
+
+  window.addEventListener('mouseup', () => { isDragging = false; });
+  canvas.addEventListener('mouseleave', () => { isDragging = false; });
+
+  document.getElementById('resetBtn').addEventListener('click', () => {
+    state.zoom = 1.0;
+    state.offsetX = 0;
+    state.offsetY = 0;
+    document.getElementById('zoom').value = 100;
+    document.getElementById('zoomVal').textContent = 100;
+    redrawPreview();
+  });
+
+  document.getElementById('downloadBtn').addEventListener('click', () => {
+    const off = document.createElement('canvas');
+    off.width = exportWidthPx;
+    off.height = exportHeightPx;
+    const offCtx = off.getContext('2d');
+    renderToCanvas(off, offCtx, exportWidthPx, exportHeightPx, 1);
+
+    const link = document.createElement('a');
+    link.download = 'idcard_ut.png';
+    link.href = off.toDataURL('image/png');
+    link.click();
+  });
+
+  redrawPreview();
+</script>
 </body>
 </html>
